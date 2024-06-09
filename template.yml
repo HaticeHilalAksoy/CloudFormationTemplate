@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Setup a Data Lake with AWS Lake Formation including S3 storage, database, and permissions.
+
+Resources:
+  DataLakeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lakeformation.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSLakeFormationDataAdmin
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+
+  DataLakeS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'forlakeformabucket-${AWS::AccountId}'
+
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: mylakeformationdatabase
+
+  DataLakeResource:
+    Type: AWS::LakeFormation::Resource
+    Properties:
+      ResourceArn: !GetAtt DataLakeS3Bucket.Arn
+      UseServiceLinkedRole: true
+      RoleArn: !GetAtt DataLakeRole.Arn
+
+  DataLakePermissions:
+    Type: AWS::LakeFormation::Permissions
+    Properties:
+      DataLakePrincipal:
+        DataLakePrincipalIdentifier: !GetAtt DataLakeRole.Arn
+      Permissions:
+        - ALL
+      Resource:
+        DatabaseResource:
+          Name: 'mylakeformationdatabase'
+    DependsOn: [DataLakeResource, GlueDatabase, DataLakeRole]
+
+Outputs:
+  BucketName:
+    Description: "Name of the S3 bucket for data lake storage"
+    Value: !Ref DataLakeS3Bucket
+  DatabaseName:
+    Description: "Lake Formation database name"
+    Value: !Ref GlueDatabase
